@@ -166,6 +166,13 @@ const server = http.createServer((req, res) => {
 
   const headOnly = req.method === 'HEAD';
 
+  // Health check: no upstream call, so setup self-check works offline
+  if (pathname === '/health' || pathname === '/-/ping') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ok');
+    return;
+  }
+
   if (pathname.startsWith(COMPOSER_PREFIX + '/') || pathname === COMPOSER_PREFIX) {
     const upstreamPath = pathname === COMPOSER_PREFIX ? '/' : pathname.slice(COMPOSER_PREFIX.length) || '/';
     const upstreamUrl = COMPOSER_UPSTREAM + upstreamPath + search;

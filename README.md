@@ -36,6 +36,14 @@ Machine-wide local cache for **Composer** (Packagist) and **Node/npm** (and pnpm
 
    Then you can work offline; the proxy serves from the local cache.
 
+5. **Optional – run proxy at login (macOS):**
+
+   ```bash
+   pkg-cache launchagent install
+   ```
+
+   Installs a LaunchAgent so the proxy starts when you log in. Logs go to `~/.local-package-cache/proxy-launchd.log`. To disable: `pkg-cache launchagent uninstall`.
+
 ## Requirements
 
 - **Composer** – [getcomposer.org](https://getcomposer.org/)
@@ -57,6 +65,8 @@ Source `scripts/config.sh` to set these, or export them before running `setup.sh
 - **`pkg-cache setup`** – Run bootstrap (setup.sh): create cache root, check Composer/Node/npm, start proxy, self-check.
 - **`pkg-cache setup-project [path]`** – Configure a project to use the local proxy (Composer repo + .npmrc). Default path is current directory.
 - **`pkg-cache populate [paths...]`** – Run composer install / npm ci (or pnpm install) in the given projects so the proxy fills the cache. Projects must already use the proxy (run setup-project first). No paths = current directory.
+- **`pkg-cache launchagent install`** – (macOS) Install a LaunchAgent so the proxy starts at login. Uses `scripts/config.sh` for port and cache root.
+- **`pkg-cache launchagent uninstall`** – (macOS) Remove the LaunchAgent and stop the proxy from starting at login.
 
 ## Reverting per-project config
 
@@ -65,7 +75,7 @@ Source `scripts/config.sh` to set these, or export them before running `setup.sh
 
 ## Failover
 
-If the cache is corrupted or the proxy is down, the proxy **fails over to upstream** (packagist.org, registry.npmjs.org) so installs still work. If the proxy process is not running, run `./setup.sh` again to start it, or start it manually: `node proxy/server.js`.
+If the cache is corrupted or the proxy is down, the proxy **fails over to upstream** (packagist.org, registry.npmjs.org) so installs still work. If the proxy process is not running, run `./setup.sh` again to start it, start it manually (`node proxy/server.js`), or use `pkg-cache launchagent install` so it starts at login (macOS).
 
 ## Layout
 
@@ -73,6 +83,7 @@ If the cache is corrupted or the proxy is down, the proxy **fails over to upstre
 - **scripts/config.sh** – Shared config (cache root, port, proxy URL).
 - **setup.sh** – Bootstrap for a new machine.
 - **proxy/server.js** – Read-through proxy (Composer + npm).
-- **bin/pkg-cache** – CLI entry (setup, setup-project, populate).
+- **bin/pkg-cache** – CLI entry (setup, setup-project, populate, launchagent).
 - **scripts/setup-project.sh** – Per-project proxy config.
 - **scripts/populate.sh** – Populate cache from project(s).
+- **scripts/install-launchagent.sh** – macOS LaunchAgent install/uninstall (run proxy at login).

@@ -57,6 +57,22 @@ elif [[ -x "${REPO_ROOT}/bin/proxy" ]]; then
 fi
 
 if [[ -n "$PROXY_SCRIPT" ]]; then
+  # Stop any existing proxy so the new one (with /health) can bind
+  if [[ -f "${REPO_ROOT}/.proxy.pid" ]]; then
+    OLD_PID=$(cat "${REPO_ROOT}/.proxy.pid" 2>/dev/null)
+    if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+      kill "$OLD_PID" 2>/dev/null || true
+      sleep 1
+    fi
+    rm -f "${REPO_ROOT}/.proxy.pid"
+  fi
+  if command -v lsof &>/dev/null; then
+    while read -r pid; do
+      [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+    done < <(lsof -i ":${PKG_CACHE_PROXY_PORT}" -t 2>/dev/null) || true
+    sleep 1
+  fi
+
   echo "Starting local proxy on ${PKG_CACHE_PROXY_HOST}:${PKG_CACHE_PROXY_PORT} ..."
   (
     cd "$REPO_ROOT"
@@ -75,17 +91,18 @@ else
 fi
 
 # --- 4. Self-check ---
-SELF_CHECK_URL="${PKG_CACHE_PROXY_URL}/"
+# Use /health so we don't hit upstream (works offline; proxy returns 200 immediately)
+SELF_CHECK_URL="${PKG_CACHE_PROXY_URL}/health"
 HTTP_CODE=""
 if command -v curl &>/dev/null; then
   HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' "$SELF_CHECK_URL" 2>/dev/null)" || true
 fi
 
 if [[ -n "$HTTP_CODE" ]]; then
-  if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "404" ]]; then
-    echo "Self-check OK: GET ${SELF_CHECK_URL} returned ${HTTP_CODE}"
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    echo "Self-check OK: GET ${SELF_CHECK_URL} returned 200"
   else
-    echo "Self-check: GET ${SELF_CHECK_URL} returned ${HTTP_CODE} (expected 200 or 404). Is the proxy running?"
+    echo "Self-check: GET ${SELF_CHECK_URL} returned ${HTTP_CODE} (expected 200). Is the proxy running?"
   fi
 else
   echo "Self-check skipped (curl not found or proxy not responding). Ensure proxy is running on ${PKG_CACHE_PROXY_HOST}:${PKG_CACHE_PROXY_PORT}."

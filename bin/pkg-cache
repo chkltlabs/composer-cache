@@ -4,6 +4,7 @@
 #   pkg-cache setup              - run bootstrap setup (setup.sh in repo root if present)
 #   pkg-cache setup-project [path] - configure project to use proxy (default path: .)
 #   pkg-cache populate [paths...] - populate cache from project(s); projects must use proxy
+#   pkg-cache launchagent install|uninstall - run proxy at login (macOS LaunchAgent)
 
 set -e
 
@@ -31,13 +32,16 @@ case "$sub" in
   populate)
     exec "$SCRIPTS_DIR/populate.sh" "$@"
     ;;
+  launchagent)
+    exec "$SCRIPTS_DIR/install-launchagent.sh" "$@"
+    ;;
   "")
-    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...]" >&2
+    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...] | launchagent install|uninstall" >&2
     exit 1
     ;;
   *)
     echo "Unknown subcommand: $sub" >&2
-    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...]" >&2
+    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...] | launchagent install|uninstall" >&2
     exit 1
     ;;
 esac

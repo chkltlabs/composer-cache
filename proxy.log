@@ -1,0 +1,4 @@
+pkg-cache proxy listening on http://127.0.0.1:4873
+  Composer repo URL: http://127.0.0.1:4873/composer/
+  npm registry URL: http://127.0.0.1:4873/
+  Cache root: /Users/erikgratz/.local-package-cache

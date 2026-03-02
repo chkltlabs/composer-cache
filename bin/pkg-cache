@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Entry point for local package cache: setup, setup-project, populate.
+# Usage:
+#   pkg-cache setup              - run bootstrap setup (setup.sh in repo root if present)
+#   pkg-cache setup-project [path] - configure project to use proxy (default path: .)
+#   pkg-cache populate [paths...] - populate cache from project(s); projects must use proxy
+
+set -e
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+SCRIPTS_DIR="$REPO_ROOT/scripts"
+
+sub="${1:-}"
+shift || true
+
+case "$sub" in
+  setup)
+    if [[ -f "$REPO_ROOT/setup.sh" ]]; then
+      exec "$REPO_ROOT/setup.sh" "$@"
+    elif [[ -f "$REPO_ROOT/../setup.sh" ]]; then
+      exec "$REPO_ROOT/../setup.sh" "$@"
+    else
+      echo "No setup.sh found in repo root or parent. Create $REPO_ROOT/setup.sh for bootstrap." >&2
+      exit 1
+    fi
+    ;;
+  setup-project)
+    exec "$SCRIPTS_DIR/setup-project.sh" "$@"
+    ;;
+  populate)
+    exec "$SCRIPTS_DIR/populate.sh" "$@"
+    ;;
+  "")
+    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...]" >&2
+    exit 1
+    ;;
+  *)
+    echo "Unknown subcommand: $sub" >&2
+    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...]" >&2
+    exit 1
+    ;;
+esac

@@ -3,8 +3,11 @@
 # Usage:
 #   pkg-cache setup              - run bootstrap setup (setup.sh in repo root if present)
 #   pkg-cache setup-project [path] - configure project to use proxy (default path: .)
+#   pkg-cache teardown-project [path] - revert project to online-only, no cache
 #   pkg-cache populate [paths...] - populate cache from project(s); projects must use proxy
 #   pkg-cache launchagent install|uninstall - run proxy at login (macOS LaunchAgent)
+#   pkg-cache status [--verbose] - show cache summary and optional package list
+#   pkg-cache cleanup [--annihilate] - prune old versions or clear entire cache
 
 set -e
 
@@ -29,19 +32,28 @@ case "$sub" in
   setup-project)
     exec "$SCRIPTS_DIR/setup-project.sh" "$@"
     ;;
+  teardown-project)
+    exec "$SCRIPTS_DIR/unsetup-project.sh" "$@"
+    ;;
   populate)
     exec "$SCRIPTS_DIR/populate.sh" "$@"
     ;;
   launchagent)
     exec "$SCRIPTS_DIR/install-launchagent.sh" "$@"
     ;;
+  status)
+    exec "$SCRIPTS_DIR/cache-status.sh" "$@"
+    ;;
+  cleanup)
+    exec "$SCRIPTS_DIR/cache-cleanup.sh" "$@"
+    ;;
   "")
-    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...] | launchagent install|uninstall" >&2
+    echo "Usage: pkg-cache setup | setup-project [path] | teardown-project [path] | populate [paths...] | launchagent install|uninstall | status [--verbose] | cleanup [--annihilate]" >&2
     exit 1
     ;;
   *)
     echo "Unknown subcommand: $sub" >&2
-    echo "Usage: pkg-cache setup | setup-project [path] | populate [paths...] | launchagent install|uninstall" >&2
+    echo "Usage: pkg-cache setup | setup-project [path] | teardown-project [path] | populate [paths...] | launchagent install|uninstall | status [--verbose] | cleanup [--annihilate]" >&2
     exit 1
     ;;
 esac

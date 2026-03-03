@@ -14,10 +14,11 @@ source "${REPO_ROOT}/scripts/config.sh"
 # --- 1. Create cache root and layout ---
 mkdir -p "${LOCAL_PACKAGE_CACHE_ROOT}/composer"
 mkdir -p "${LOCAL_PACKAGE_CACHE_ROOT}/node"
+mkdir -p "${LOCAL_PACKAGE_CACHE_ROOT}/python"
 if [[ ! -f "${LOCAL_PACKAGE_CACHE_ROOT}/cache.json" ]]; then
   echo '{"lastPopulate": null, "projects": [], "lockfileHashes": {}}' > "${LOCAL_PACKAGE_CACHE_ROOT}/cache.json"
 fi
-echo "Cache root: ${LOCAL_PACKAGE_CACHE_ROOT} (composer/ and node/ ready)"
+echo "Cache root: ${LOCAL_PACKAGE_CACHE_ROOT} (composer/, node/, python/ ready)"
 
 # --- 2. Check for Composer and Node/npm ---
 MISSING=()

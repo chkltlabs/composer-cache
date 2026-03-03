@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 /**
- * Local read-through proxy for Composer (Packagist) and npm (registry.npmjs.org).
+ * Local read-through proxy for Composer (Packagist), npm (registry.npmjs.org), and Python (PyPI).
  *
  * ROUTING (for setup-project / per-project config):
- * - Composer: set repo URL to https://127.0.0.1:<port>/composer/
- *   → Requests to /composer/* are forwarded to https://repo.packagist.org (strip /composer prefix).
- * - npm: set registry to https://127.0.0.1:<port>/
- *   → All other paths (e.g. /lodash, /@scope/pkg, /-/package/pkg-1.0.0.tgz) go to https://registry.npmjs.org.
+ * - Composer: repo URL http://127.0.0.1:<port>/composer/ → https://repo.packagist.org
+ * - npm: registry http://127.0.0.1:<port>/ → https://registry.npmjs.org
+ * - Python: index http://127.0.0.1:<port>/pypi/simple/ → https://pypi.org/simple/ ; files at /pypi/files/ → https://files.pythonhosted.org
  *
  * Cache: LOCAL_PACKAGE_CACHE_ROOT (default ~/.local-package-cache)
- *   - cache/composer/ for Packagist responses
- *   - cache/node/ for npm responses
- * On cache miss or read error → fetch from upstream, store, return (failover).
+ *   - composer/, node/, python/
+ * On cache miss or read error → fetch upstream, store, return (failover).
  */
 
 const http = require('http');
@@ -28,8 +26,16 @@ const COMPOSER_PREFIX = '/composer';
 const COMPOSER_UPSTREAM = 'https://repo.packagist.org';
 const NPM_UPSTREAM = 'https://registry.npmjs.org';
 
+const PYPI_PREFIX = '/pypi';
+const PYPI_API_UPSTREAM = 'https://pypi.org';
+const PYPI_FILES_UPSTREAM = 'https://files.pythonhosted.org';
+const PYPI_FILES_PREFIX = '/pypi/files';
+
 const COMPOSER_CACHE_DIR = path.join(CACHE_ROOT, 'composer');
 const NPM_CACHE_DIR = path.join(CACHE_ROOT, 'node');
+const PYTHON_CACHE_DIR = path.join(CACHE_ROOT, 'python');
+
+const PYPI_FILES_PROXY_BASE = `http://${HOST}:${PORT}${PYPI_FILES_PREFIX}`;
 
 /**
  * Make a path+query safe for use as a filesystem path (single file).
@@ -121,7 +127,10 @@ function fetchUpstream(url, isBinary, cb) {
   req.end();
 }
 
-function serveFromCacheOrUpstream(res, cacheDir, key, upstreamUrl, isBinary, headOnly, onDone) {
+/**
+ * Optional transform(data) run on upstream response before cache/send. Returns Buffer.
+ */
+function serveFromCacheOrUpstream(res, cacheDir, key, upstreamUrl, isBinary, headOnly, onDone, transform) {
   const send = (statusCode, data, headers) => {
     const ct = headers['content-type'] || (isBinary ? 'application/octet-stream' : 'application/json');
     const len = headers['content-length'] || (Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data));
@@ -147,6 +156,11 @@ function serveFromCacheOrUpstream(res, cacheDir, key, upstreamUrl, isBinary, hea
       res.end(headOnly ? undefined : 'Bad Gateway: ' + err.message);
       if (onDone) onDone();
       return;
+    }
+    if (transform && !headOnly && data) {
+      data = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8');
+      data = transform(data);
+      headers = { ...headers, 'content-length': String(data.length) };
     }
     writeToCache(cacheDir, key, data, headers, isBinary);
     send(statusCode || 200, data, headers);
@@ -181,6 +195,28 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Python (PyPI): /pypi/simple/* and /pypi/pypi/* -> pypi.org ; /pypi/files/* -> files.pythonhosted.org
+  if (pathname.startsWith(PYPI_FILES_PREFIX + '/') || pathname === PYPI_FILES_PREFIX) {
+    const upstreamPath = pathname === PYPI_FILES_PREFIX ? '/' : pathname.slice(PYPI_FILES_PREFIX.length) || '/';
+    const upstreamUrl = PYPI_FILES_UPSTREAM + upstreamPath + search;
+    const key = safeCacheKey(upstreamPath, search);
+    serveFromCacheOrUpstream(res, PYTHON_CACHE_DIR, key, upstreamUrl, true, headOnly, null);
+    return;
+  }
+  if (pathname.startsWith(PYPI_PREFIX + '/')) {
+    const upstreamPath = pathname.slice(PYPI_PREFIX.length) || '/';
+    const upstreamUrl = PYPI_API_UPSTREAM + upstreamPath + search;
+    const key = safeCacheKey(upstreamPath, search);
+    // Rewrite links to files.pythonhosted.org so pip/poetry fetch files through our proxy
+    const transform = (data) => {
+      const s = data.toString('utf8');
+      const out = s.replace(/https:\/\/files\.pythonhosted\.org/g, PYPI_FILES_PROXY_BASE);
+      return Buffer.from(out, 'utf8');
+    };
+    serveFromCacheOrUpstream(res, PYTHON_CACHE_DIR, key, upstreamUrl, false, headOnly, null, transform);
+    return;
+  }
+
   // npm: everything else (/, /package-name, /@scope/pkg, /-/package/name-version.tgz)
   const npmPath = pathname === '' ? '/' : pathname;
   const npmUrl = NPM_UPSTREAM + npmPath + search;
@@ -191,10 +227,12 @@ const server = http.createServer((req, res) => {
 
 ensureDir(COMPOSER_CACHE_DIR);
 ensureDir(NPM_CACHE_DIR);
+ensureDir(PYTHON_CACHE_DIR);
 
 server.listen(PORT, HOST, () => {
   console.error(`pkg-cache proxy listening on http://${HOST}:${PORT}`);
   console.error(`  Composer repo URL: http://${HOST}:${PORT}/composer/`);
   console.error(`  npm registry URL: http://${HOST}:${PORT}/`);
+  console.error(`  PyPI index URL:   http://${HOST}:${PORT}/pypi/simple/`);
   console.error(`  Cache root: ${CACHE_ROOT}`);
 });

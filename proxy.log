@@ -1,4 +1,20 @@
-pkg-cache proxy listening on http://127.0.0.1:4873
-  Composer repo URL: http://127.0.0.1:4873/composer/
-  npm registry URL: http://127.0.0.1:4873/
-  Cache root: /Users/erikgratz/.local-package-cache
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:4873
+    at Server.setupListenHandle [as _listen2] (node:net:2016:16)
+    at listenInCluster (node:net:2073:12)
+    at node:net:2282:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2052:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 4873
+}
+
+Node.js v25.6.1

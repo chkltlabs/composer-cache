@@ -10,6 +10,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=config.sh
 source "$SCRIPT_DIR/config.sh"
 
+# Run composer install, preferring Laravel Sail when available on the host.
+run_composer_install() {
+  # Detect Laravel Sail on the host (not inside a container).
+  if [[ -x "./vendor/bin/sail" && -S /var/run/docker.sock && ! -f "/.dockerenv" ]]; then
+    echo "Detected Laravel Sail; running: ./vendor/bin/sail composer install --no-cache"
+    ./vendor/bin/sail composer install --no-cache
+  else
+    echo "Running: composer install --no-cache"
+    composer install --no-cache
+  fi
+}
+
 if [[ $# -eq 0 ]]; then
   PATHS=(.)
 else
@@ -27,8 +39,7 @@ for PROJECT_PATH in "${PATHS[@]}"; do
   cd "$PROJECT_PATH"
 
   if [[ -f composer.lock ]]; then
-    echo "Running: composer install"
-    composer install
+    run_composer_install
   fi
 
   if [[ -f package-lock.json ]]; then
@@ -39,8 +50,47 @@ for PROJECT_PATH in "${PATHS[@]}"; do
     pnpm install
   fi
 
-  if [[ ! -f composer.lock && ! -f package-lock.json && ! -f pnpm-lock.yaml ]]; then
-    echo "No composer.lock, package-lock.json, or pnpm-lock.yaml found; skipping."
+  # Python: pip or pip-tools
+  if [[ -f requirements.txt ]]; then
+    if [[ -f .pip/pip.conf ]]; then
+      export PIP_CONFIG_FILE="$PROJECT_PATH/.pip/pip.conf"
+    fi
+    if command -v pip-sync &>/dev/null && [[ -f requirements.txt ]]; then
+      echo "Running: pip-sync requirements.txt"
+      pip-sync requirements.txt 2>/dev/null || pip install -r requirements.txt
+    else
+      echo "Running: python -m pip install -r requirements.txt"
+      python -m pip install -r requirements.txt
+    fi
+    unset PIP_CONFIG_FILE 2>/dev/null || true
+  elif [[ -f requirements.in ]]; then
+    if [[ -f .pip/pip.conf ]]; then
+      export PIP_CONFIG_FILE="$PROJECT_PATH/.pip/pip.conf"
+    fi
+    if command -v pip-compile &>/dev/null; then
+      echo "Running: pip-compile requirements.in"
+      pip-compile requirements.in -o requirements.txt 2>/dev/null || true
+    fi
+    if [[ -f requirements.txt ]]; then
+      echo "Running: pip install -r requirements.txt"
+      pip install -r requirements.txt
+    else
+      echo "Running: pip install -r requirements.in"
+      pip install -r requirements.in
+    fi
+    unset PIP_CONFIG_FILE 2>/dev/null || true
+  fi
+
+  # Poetry
+  if [[ -f pyproject.toml ]] && grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null && command -v poetry &>/dev/null; then
+    echo "Running: poetry install"
+    poetry install --no-interaction --no-ansi
+  fi
+
+  if [[ ! -f composer.lock && ! -f package-lock.json && ! -f pnpm-lock.yaml && ! -f requirements.txt && ! -f requirements.in ]]; then
+    if ! { [[ -f pyproject.toml ]] && grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null; }; then
+      echo "No known lockfile or Python project found; skipping."
+    fi
   fi
 
   cd - >/dev/null
